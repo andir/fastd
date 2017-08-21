@@ -243,7 +243,29 @@ void fastd_poll_handle(void) {
 	pthread_sigmask(SIG_SETMASK, &set, &oldset);
 
 	int ret = 0;
+#ifdef FASTD_AFL_PERSISTENT_SHIM
+        /* Initialize recv stuff for fuzzing */
+        size_t insize;
+        size_t sockaddr_in servaddr;
+        int udp_socket;
+        char *env_dest_ip = getenv("FASTD_AFL_DEST_IP");
+        char *env_dest_port = getenv("FASTD_AFL_DEST_PORT");
+        int dest_port = env_dest_port ? strtol(env_dest_port, NULL, 10) : 9090;
+        bzero(&servaddr, sizeof(servaddr));
+        servaddr.sin_family = AF_INET;
+        servaddr.sin_addr.s_addr = inet_addr(dest_ip);
+        servaddr.sin_port = htons(dest_port);
+        char buf[5120];
 
+        /* Read packet from stdin and send to socket */
+        if (getenv("FASTD_AFL_STDIN") || getenv("FASTD_AFL_CMIN") || getenv("AFL_PERSISTENT")) {
+                memset(buf, 0m 5120);
+                inszie = read(0, buf, 5120);
+                struct pollfd *pollfd = &VECTOR_INDEX(ctx.pollfds, 1);
+                udp_socket = pollfd->fd;
+                sendto(udp_socket, buf, insize, 0, (struct sockaddr*)&servaddr, sizeof(servaddr));
+        }
+#endif // FASTD_AFL_PERSIST_SHIM
 #ifdef USE_SELECT
 	/* Inefficient implementation for OSX... */
 	fd_set readfds;
@@ -303,9 +325,9 @@ void fastd_poll_handle(void) {
 	pthread_sigmask(SIG_SETMASK, &oldset, NULL);
 	fastd_update_time();
 
+
 	if (ret <= 0)
 		return;
-
 	for (i = 0; i < VECTOR_LEN(ctx.pollfds) && ret > 0; i++) {
 		struct pollfd *pollfd = &VECTOR_INDEX(ctx.pollfds, i);
 
